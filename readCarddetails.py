@@ -7,16 +7,31 @@ import pytesseract as tes
 import re
 from PIL import Image
 import os
+import imquality.brisque as brisque
+from skimage import io, img_as_float
 
 
+#Using brisque scores to find quality of image
+#but due to no proper availability of bank card images we can't create a relationship
+def quality_check(loc):
+    try:
+        img= img_as_float(io.imread(loc, as_gray=True))
+        score=brisque.score(img)
+        print("Image Score = ", score)
+    except:
+        print("Exception in finding scores")
+        
+    
 
+
+#Many Cards use OCR-A language (Matching with its template)
 def template_match(image,req_str):
     try:
         # load the reference OCR-A image from disk, convert it to grayscale,
         # and threshold it, such that the digits appear as *white* on a
         # *black* background
         # and invert it, such that the digits appear as *white* on a *black*
-        ref = cv2.imread("C:\\Users\\Man$\\Desktop\\OCR.png")
+        ref = cv2.imread("C:\\Users\\Man$\\Desktop\\Cards\\OCR.png")
         ref = cv2.cvtColor(ref, cv2.COLOR_BGR2GRAY)
         ref = cv2.threshold(ref, 10, 255, cv2.THRESH_BINARY_INV)[1]
 
@@ -162,9 +177,10 @@ def template_match(image,req_str):
 
         # display the output credit card information to the screen
         #print("Credit Card Type: {}".format(FIRST_NUMBER[output[0]]))
-        tes.pytesseract.tesseract_cmd = 'C:\\Program Files\\Tesseract-OCR\\tesseract'
+        #tes.pytesseract.tesseract_cmd = 'C:\\Program Files\\Tesseract-OCR\\tesseract'
         text = tes.image_to_string(image)
         card_number="".join(output)
+        print("c = ",card_number)
         card_expiry = re.findall('\d{2}/\d{2}',text)
         if(req_str=="card_expiry")and len(card_expiry)>0:
             return (card_expiry[0])
@@ -175,21 +191,25 @@ def template_match(image,req_str):
     except:
         return None
 
-
+#card_number
 def find_c_no(text,image):
     card_number = re.findall('\d{4}\s\d{4}\s\d{4}\s\d{4}',text)
+    #if not sending to template match
     if not card_number:
         card_number=template_match(image,"card_number")
         return card_number
     return card_number[0]
 
+#card_expiry
 def find_c_exp(text,image):
     card_expiry = re.findall('\d{2}/\d{2}',text)
+    #if not sending to template match
     if not card_expiry:
         card_expiry=template_match(image,"card_expiry")
         return card_expiry
     return card_expiry[0]
 
+#card_name
 def find_c_name(text):
     after_expiry=re.split('\d{2}/\d{2}',text) #name exists after expiry
     card_name=[]
@@ -212,45 +232,49 @@ def find_c_name(text):
             
 
 
-
+#thresholding and removing noise with median blur along with normal OCR
 def find_details(loc):
     image = cv2.imread(loc)
-    tes.pytesseract.tesseract_cmd = 'C:\\Program Files\\Tesseract-OCR\\tesseract'
+    #image = cv2.fastNlMeansDenoisingColored(image,None,20,10,7,21)
+    cv2.imshow("Image",image)
+    #tes.pytesseract.tesseract_cmd = 'C:\\Program Files\\Tesseract-OCR\\tesseract'
     text = tes.image_to_string(Image.open(loc))
+    
+    #thresholding
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    gray = cv2.threshold(gray, 0, 255,
+    gray_thresh = cv2.threshold(gray, 0, 255,
             cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
     filename_thresh = "C:\\Users\\Man$\\Desktop\\{}.png".format(os.getpid())
     cv2.imwrite(filename_thresh, gray)
     # load the image as a PIL/Pillow image, apply OCR, and then delete
     # the temporary file
-    text_thresh = tes.image_to_string(Image.open(filename_thresh))
+    text_thresh = tes.image_to_string(gray_thresh)
     
 
-    gray = cv2.medianBlur(gray, 3)
-    filename_blur = "C:\\Users\\Man$\\Desktop\\a.png".format(os.getpid())
-    cv2.imwrite(filename_blur, gray)
+    gray_blur = cv2.medianBlur(gray, 3)
+    #filename_blur = "C:\\Users\\Man$\\Desktop\\a.png".format(os.getpid())
+    #cv2.imwrite(filename_blur, gray)
     # load the image as a PIL/Pillow image, apply OCR, and then delete
     # the temporary file
-    text_blur = tes.image_to_string(Image.open(filename_blur))
+    text_blur = tes.image_to_string(gray_blur)
     
-    '''print("extract 1. ",text)
+    print("extract 1. ",text)
     print("extract 2. ",text_thresh)
-    print("extract 3. ",text_blur)'''
+    print("extract 3. ",text_blur)
 
     card_number= find_c_no(text,image)
     if not card_number:
-        card_number= find_c_no(text_thresh,Image.open(filename_thresh))
+        card_number= find_c_no(text_thresh,gray_thresh)
         if not card_number:
-            card_number= find_c_no(text_blur,Image.open(filename_blur))
+            card_number= find_c_no(text_blur,gray_blur)
     print("Card_Number: ",card_number)
     
     
     card_expiry= find_c_exp(text,image)
     if not card_expiry:
-        card_expiry= find_c_exp(text_thresh,Image.open(filename_thresh))
+        card_expiry= find_c_exp(text_thresh,gray_thresh)
         if not card_expiry:
-            card_expiry= find_c_exp(text_blur,Image.open(filename_blur))
+            card_expiry= find_c_exp(text_blur,gray_blur)
     print("Card_Expiry: ",card_expiry)
     
     card_name= find_c_name(text)
@@ -260,14 +284,14 @@ def find_details(loc):
             card_name= find_c_name(text_blur)
     print("Card_Name: ",card_name)
 
-    os.remove(filename_thresh)
-    os.remove(filename_blur)
+    #os.remove(filename_thresh)
+    #os.remove(filename_blur)
 
 
 
 
 # driver
-loc="C:\\Users\\Man$\\Desktop\\Cards\\c04.tiff"
-find_details(loc)
-
-
+if __name__ == '__main__':
+    loc="C:\\Users\\Man$\\Desktop\\Cards\\card2.png"
+    quality_check(loc)
+    find_details(loc)
