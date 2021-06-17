@@ -258,9 +258,9 @@ def find_details(loc):
     # the temporary file
     text_blur = tes.image_to_string(gray_blur)
     
-    print("extract 1. ",text)
+    '''print("extract 1. ",text)
     print("extract 2. ",text_thresh)
-    print("extract 3. ",text_blur)
+    print("extract 3. ",text_blur)'''
 
     card_number= find_c_no(text,image)
     if not card_number:
